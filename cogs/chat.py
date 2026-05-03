@@ -50,7 +50,7 @@ class Chat(commands.Cog):
                 response = groq_client.chat.completions.create(
                     model="llama-3.3-70b-versatile",
                     messages=history,
-                    max_tokens=1024,
+                    max_tokens=2000,
                     temperature=0.7,
                 )
 
