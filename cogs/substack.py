@@ -17,12 +17,12 @@ pending_drafts = {}
 
 def get_headers():
     return {
-        "Cookie": f"substack.sid={SUBSTACK_SID}",
+        "Cookie": SUBSTACK_SID,  # পুরো cookie string
         "Content-Type": "application/json",
-        "User-Agent": "Mozilla/5.0",
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
         "Referer": SUBSTACK_URL,
+        "Origin": SUBSTACK_URL,  # ← এটা যোগ করো
     }
-
 
 def extract_json(text: str) -> dict:
     """Raw text থেকে JSON বের করার multiple fallback"""
