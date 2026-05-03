@@ -54,7 +54,7 @@ async def generate_post(topic: str, language: str = "বাংলা") -> dict:
                 "content": f"Write an engaging Substack post about: {topic}"
             }
         ],
-        max_tokens=2048,
+        max_tokens=6048,
         temperature=0.7,
     )
     raw = response.choices[0].message.content
