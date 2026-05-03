@@ -10,7 +10,7 @@ PREFIX = os.getenv("PREFIX", "!")
 intents = discord.Intents.default()
 intents.message_content = True
 
-bot = commands.Bot(command_prefix=PREFIX, intents=intents, help_command=None)
+bot = commands.Bot(command_prefix=PREFIX, intents=intents)
 
 @bot.event
 async def on_ready():
@@ -27,10 +27,11 @@ async def help_cmd(ctx):
     embed.add_field(name="Media", value="`!image [prompt]` `!video [prompt]`", inline=False)
     embed.add_field(name="TempMail", value="`!tempmail` `!getmail` `!newmail`", inline=False)
     embed.add_field(name="Browser", value="`!login [site] [email] [pass]` `!logout [site]`", inline=False)
+    embed.add_field(name="💬 Chat (AI)", value="`!chat [message]` `!clearchat` `!chathistory`", inline=False)
     await ctx.send(embed=embed)
 
 async def load_cogs():
-    for cog in ["channels", "content", "media", "tempmail", "browser"]:
+    for cog in ["channels", "content", "media", "tempmail", "browser", "chat"]:  # ← chat যোগ হয়েছে
         try:
             await bot.load_extension(f"cogs.{cog}")
             print(f"✅ {cog} লোড হয়েছে")
