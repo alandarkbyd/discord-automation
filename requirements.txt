@@ -1,0 +1,8 @@
+discord.py==2.3.2
+groq
+python-dotenv
+aiohttp
+requests
+playwright
+beautifulsoup4
+flask
