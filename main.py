@@ -28,10 +28,11 @@ async def help_cmd(ctx):
     embed.add_field(name="TempMail", value="`!tempmail` `!getmail` `!newmail`", inline=False)
     embed.add_field(name="Browser", value="`!login [site] [email] [pass]` `!logout [site]`", inline=False)
     embed.add_field(name="💬 Chat (AI)", value="`!chat [message]` `!clearchat` `!chathistory`", inline=False)
+    embed.add_field(name="📰 Substack", value="`!writepost [বিষয়]` `!publishpost` `!cancelpost`", inline=False)
     await ctx.send(embed=embed)
 
 async def load_cogs():
-    for cog in ["channels", "content", "media", "tempmail", "browser", "chat"]:  # ← chat যোগ হয়েছে
+    for cog in ["channels", "content", "media", "tempmail", "browser", "chat", "substack"]:
         try:
             await bot.load_extension(f"cogs.{cog}")
             print(f"✅ {cog} লোড হয়েছে")
