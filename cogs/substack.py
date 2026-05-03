@@ -7,8 +7,29 @@ import re
 
 groq_client = Groq(api_key=os.getenv("GROQ_API_KEY"))
 
-# Pending drafts
 pending_drafts = {}
+
+MODELS = [
+    "llama-3.3-70b-versatile",
+    "llama-3.1-8b-instant",
+    "gemma2-9b-it",
+]
+
+
+def get_completion(messages, max_tokens=4048):
+    for model in MODELS:
+        try:
+            return groq_client.chat.completions.create(
+                model=model,
+                messages=messages,
+                max_tokens=max_tokens,
+                temperature=0.7,
+            )
+        except Exception as e:
+            if "429" in str(e) or "rate_limit" in str(e).lower():
+                continue
+            raise
+    raise Exception("সব model এর limit শেষ! কিছুক্ষণ পর আবার চেষ্টা করো।")
 
 
 def extract_json(text: str) -> dict:
@@ -36,27 +57,22 @@ def extract_json(text: str) -> dict:
 
 
 async def generate_post(topic: str, language: str = "বাংলা") -> dict:
-    response = groq_client.chat.completions.create(
-        model="llama-3.3-70b-versatile",
-        messages=[
-            {
-                "role": "system",
-                "content": (
-                    f"You are an expert content writer. Write a Substack post in {language}.\n"
-                    "IMPORTANT: Your entire response must be ONLY a valid JSON object. "
-                    "No explanation, no markdown, no extra text before or after.\n"
-                    'Respond with exactly this structure (no extra keys):\n'
-                    '{"title": "post title here", "subtitle": "subtitle here", "body": "full post content here"}'
-                )
-            },
-            {
-                "role": "user",
-                "content": f"Write an engaging Substack post about: {topic}"
-            }
-        ],
-        max_tokens=6048,
-        temperature=0.7,
-    )
+    response = get_completion([
+        {
+            "role": "system",
+            "content": (
+                f"You are an expert content writer. Write a Substack post in {language}.\n"
+                "IMPORTANT: Your entire response must be ONLY a valid JSON object. "
+                "No explanation, no markdown, no extra text before or after.\n"
+                'Respond with exactly this structure (no extra keys):\n'
+                '{"title": "post title here", "subtitle": "subtitle here", "body": "full post content here"}'
+            )
+        },
+        {
+            "role": "user",
+            "content": f"Write an engaging Substack post about: {topic}"
+        }
+    ])
     raw = response.choices[0].message.content
     return extract_json(raw)
 
@@ -75,7 +91,6 @@ class SubstackCog(commands.Cog):
             post = await generate_post(topic, language)
             pending_drafts[ctx.author.id] = post
 
-            # Preview embed
             embed = discord.Embed(
                 title=f"📝 {post['title']}",
                 description=post.get("subtitle", ""),
@@ -94,7 +109,7 @@ class SubstackCog(commands.Cog):
 
     @commands.command(name="getpost")
     async def get_post(self, ctx):
-        """পুরো post টা copy করার জন্য দেখাও — !getpost"""
+        """পুরো post copy করার জন্য দেখাও — !getpost"""
         user_id = ctx.author.id
         if user_id not in pending_drafts:
             await ctx.reply("❌ কোনো post নেই। আগে `!writepost [বিষয়]` দিয়ে লেখো।")
@@ -102,21 +117,18 @@ class SubstackCog(commands.Cog):
 
         post = pending_drafts[user_id]
 
-        # Title আলাদা message এ
         await ctx.reply(f"**📌 Title:**\n```\n{post['title']}\n```")
 
-        # Subtitle আলাদা message এ
         if post.get("subtitle"):
             await ctx.reply(f"**📌 Subtitle:**\n```\n{post['subtitle']}\n```")
 
-        # Body — 1900 char এ ভেঙে পাঠাও
         body = post["body"]
         chunks = [body[i:i+1900] for i in range(0, len(body), 1900)]
         for i, chunk in enumerate(chunks):
             label = f"**📄 Body ({i+1}/{len(chunks)}):**\n" if len(chunks) > 1 else "**📄 Body:**\n"
             await ctx.reply(f"{label}```\n{chunk}\n```")
 
-        await ctx.reply("✅ উপরের text গুলো copy করে Substack এ paste করো!\n🔗 https://substack.com/publish/post/new")
+        await ctx.reply("✅ Copy করে Substack এ paste করো!\n🔗 https://substack.com/publish/post/new")
 
     @commands.command(name="cancelpost")
     async def cancel_post(self, ctx):
