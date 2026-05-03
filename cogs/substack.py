@@ -4,6 +4,7 @@ from groq import Groq
 import aiohttp
 import os
 import json
+import re
 
 groq_client = Groq(api_key=os.getenv("GROQ_API_KEY"))
 
@@ -23,23 +24,48 @@ def get_headers():
     }
 
 
-async def generate_post(topic: str) -> dict:
+def extract_json(text: str) -> dict:
+    """Raw text থেকে JSON বের করার multiple fallback"""
+    # Attempt 1: সরাসরি parse
+    try:
+        return json.loads(text.strip())
+    except json.JSONDecodeError:
+        pass
+
+    # Attempt 2: ```json ... ``` block থেকে বের করো
+    match = re.search(r"```(?:json)?\s*(\{.*?\})\s*```", text, re.DOTALL)
+    if match:
+        try:
+            return json.loads(match.group(1))
+        except json.JSONDecodeError:
+            pass
+
+    # Attempt 3: প্রথম { থেকে শেষ } পর্যন্ত নাও
+    start = text.find("{")
+    end = text.rfind("}") + 1
+    if start != -1 and end > start:
+        try:
+            return json.loads(text[start:end])
+        except json.JSONDecodeError:
+            pass
+
+    raise ValueError(f"JSON পাওয়া যায়নি। Raw response:\n{text[:300]}")
+
+
+async def generate_post(topic: str, language: str = "বাংলা") -> dict:
     """Groq দিয়ে post তৈরি করো"""
     response = groq_client.chat.completions.create(
         model="llama-3.3-70b-versatile",
         messages=[
             {
                 "role": "system",
-                "content": """You are an expert content writer.
-Write a complete Substack post in English.
-Title, subtitle and body all must be in English.
-                Response শুধুমাত্র JSON format এ দাও, অন্য কিছু না।
-                Format:
-                {
-                  "title": "post এর title",
-                  "subtitle": "একটা আকর্ষণীয় subtitle",
-                  "body": "পুরো post এর content (markdown format এ)"
-                }"""
+                "content": (
+                    f"You are an expert content writer. Write a Substack post in {language}.\n"
+                    "IMPORTANT: Your entire response must be ONLY a valid JSON object. "
+                    "No explanation, no markdown, no extra text before or after.\n"
+                    'Respond with exactly this structure (no extra keys):\n'
+                    '{"title": "post title here", "subtitle": "subtitle here", "body": "full post content here"}'
+                )
             },
             {
                 "role": "user",
@@ -51,9 +77,7 @@ Title, subtitle and body all must be in English.
     )
 
     raw = response.choices[0].message.content
-    # JSON parse করো
-    raw = raw.strip().removeprefix("```json").removeprefix("```").removesuffix("```").strip()
-    return json.loads(raw)
+    return extract_json(raw)
 
 
 async def create_draft(title: str, subtitle: str, body: str) -> dict:
@@ -113,16 +137,17 @@ class SubstackCog(commands.Cog):
         self.bot = bot
 
     @commands.command(name="writepost")
-    async def write_post(self, ctx, *, topic: str):
-        """বিষয় দিলে AI দিয়ে Substack post লিখবে — !writepost [বিষয়]"""
+    async def write_post(self, ctx, lang: str = "bangla", *, topic: str):
+        """AI দিয়ে Substack post লিখবে — !writepost [bangla/english] [বিষয়]"""
         if not SUBSTACK_SID or not SUBSTACK_URL:
             await ctx.reply("❌ `SUBSTACK_SID` বা `SUBSTACK_URL` Railway তে set করা নেই!")
             return
 
-        msg = await ctx.reply("✍️ Post লিখছি, একটু অপেক্ষা করো...")
+        language = "বাংলা" if lang.lower() in ("bangla", "bn", "বাংলা") else "English"
+        msg = await ctx.reply(f"✍️ {language} তে post লিখছি, একটু অপেক্ষা করো...")
 
         try:
-            post = await generate_post(topic)
+            post = await generate_post(topic, language)
 
             # Draft হিসেবে save করো user এর জন্য
             pending_drafts[ctx.author.id] = post
@@ -140,8 +165,8 @@ class SubstackCog(commands.Cog):
 
             await msg.edit(content="✅ Post তৈরি হয়েছে! দেখো:", embed=embed)
 
-        except json.JSONDecodeError:
-            await msg.edit(content="❌ AI এর response parse করা যায়নি। আবার চেষ্টা করো।")
+        except ValueError as e:
+            await msg.edit(content=f"❌ {e}")
         except Exception as e:
             await msg.edit(content=f"❌ Error: `{e}`")
 
@@ -159,7 +184,6 @@ class SubstackCog(commands.Cog):
         try:
             post = pending_drafts[user_id]
 
-            # Draft তৈরি করো
             draft = await create_draft(post["title"], post.get("subtitle", ""), post["body"])
             draft_id = draft.get("id")
 
@@ -167,7 +191,6 @@ class SubstackCog(commands.Cog):
                 await msg.edit(content="❌ Draft তৈরি হয়নি। Cookie expire হয়নি তো?")
                 return
 
-            # Publish করো
             success = await publish_draft(draft_id)
 
             if success:
