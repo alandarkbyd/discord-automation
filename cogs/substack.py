@@ -30,8 +30,9 @@ async def generate_post(topic: str) -> dict:
         messages=[
             {
                 "role": "system",
-                "content": """তুমি একজন expert content writer। 
-                তোমাকে একটা Substack post লিখতে হবে।
+                "content": """You are an expert content writer.
+Write a complete Substack post in English.
+Title, subtitle and body all must be in English.
                 Response শুধুমাত্র JSON format এ দাও, অন্য কিছু না।
                 Format:
                 {
@@ -42,7 +43,7 @@ async def generate_post(topic: str) -> dict:
             },
             {
                 "role": "user",
-                "content": f"এই বিষয়ে একটা engaging Substack post লেখো: {topic}"
+                "content": f"Write an engaging Substack post about: {topic}"
             }
         ],
         max_tokens=2048,
